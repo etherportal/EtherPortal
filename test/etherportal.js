@@ -27,7 +27,7 @@ contract("EtherPortal", accounts => {
     for (i = 0; i < numPayments.length; i++) {
       const n = numPayments[i];
       const recipientList = recipients.slice(0,n);
-      const tx = await contract.batchPay(recipientList, amounts.slice(0,n), {value: n});
+      const tx = await contract.massTeleport(recipientList, amounts.slice(0,n), {value: n});
       console.log(`Cost of sending ${n} payments: ${tx.receipt.gasUsed} gas`);
 
 
