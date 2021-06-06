@@ -2,47 +2,49 @@ const EtherPortal = artifacts.require("./EtherPortal.sol");
 const BN = web3.utils.BN;
 
 contract("EtherPortal", accounts => {
-  it("...should check the cost of gas payments.", async () => {
+  it("...should log the cost of gas payments and check final balances are consistent.", async () => {
 
-    const numPayments = [1,10,20,50,100]; // test making n payments, for each element of array numPayments
-    const amount = 1; // amount in wei to pay each recipient
-    const testAccount = accounts[1]; // account to test for correct balance update after payments
+    const numTransfers = [1,10,20,100]; // test making n batch transfers, for each element n of the array
+    const amount = 1; // amount of wei to transfer to each recipient
 
-
-    const contract = await EtherPortal.deployed();
-
-    const startingBalance = await web3.eth.getBalance(testAccount);
-    let totalPayment = 0;
-    const maxPayments = Math.max.apply(Math, numPayments);
-    const amounts = Array(maxPayments).fill(amount); 
-    let recipients = [];
-
-    // create array of 100 (repeating) accounts with pre-existing state objects (i.e. accounts have been previously used)
-    // note accounts without pre-existing state objects will cost 25k additional gas to pay
-    for (i=0; i < Math.ceil(maxPayments/10); i++) {
-      recipients = [...recipients, ...accounts];
+    for (let numTransfer of numTransfers) {
+      await testPortal(numTransfer, amount);
     }
 
-    // send amount of wei to each account address in recipients 
-    for (i = 0; i < numPayments.length; i++) {
-      const n = numPayments[i];
-      const recipientList = recipients.slice(0,n);
-      const tx = await contract.massTeleport(recipientList, amounts.slice(0,n), {value: n});
-      console.log(`Cost of sending ${n} payments: ${tx.receipt.gasUsed} gas`);
-
-
-      for (let recipient of recipientList) {
-        if (recipient == testAccount) {
-          totalPayment += amount;
-        }
-      }
-
-    }
-
-    const expectedBalance = new BN(startingBalance).add(new BN(totalPayment)).toString();
-    const finalBalance = await web3.eth.getBalance(testAccount);
-    console.log(finalBalance);
-
-    assert.equal(expectedBalance, finalBalance, "Recipient balances did not update correctly");
   });
+
 });
+
+
+async function testPortal(numRecipients, amountToTransfer) {
+
+  const amounts = Array(numRecipients).fill(amountToTransfer); // array of amounts to pay each recipient
+
+  const recipients = Array(numRecipients);
+
+  for (i=0; i<numRecipients; i++) {
+    var account = await web3.eth.accounts.create();
+    recipients[i] = account.address;
+  }
+
+  const contract = await EtherPortal.deployed();
+
+  const totalValue = amountToTransfer*numRecipients;
+
+  const tx1 = await contract.massTeleport(recipients, amounts, {value: totalValue});
+  console.log(`Cost of sending ${numRecipients} payments to nonexistent accounts: ${tx1.receipt.gasUsed} gas`);
+
+  const tx2 = await contract.massTeleport(recipients, amounts, {value: totalValue});
+  console.log(`Cost of sending ${numRecipients} payments to existing accounts: ${tx2.receipt.gasUsed} gas`);
+
+  const expectedBalance = (amountToTransfer*2).toString();
+  const finalBalances = Array(numRecipients);
+
+  for (i=0; i<numRecipients; i++) {
+    finalBalances[i] = await web3.eth.getBalance(recipients[i]);
+    assert.equal(expectedBalance, finalBalances[i], `Balance did not update correctly for ${recipients[i]} with balance: ${finalBalances[i]}`);
+
+  }
+
+  return finalBalances;
+}
